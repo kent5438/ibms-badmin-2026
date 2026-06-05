@@ -75,7 +75,12 @@
             </button>
         </nav>
         
-        <div class="border-t border-slate-800 pt-4 mt-auto">
+        <div class="border-t border-slate-800 pt-4 mt-auto space-y-3">
+            <button onclick="forceDownloadFromCloud()" class="w-full flex items-center justify-center space-x-2 bg-sky-500 hover:bg-sky-600 text-slate-950 py-3 px-4 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-sky-500/10">
+                <i data-lucide="cloud-download" class="w-4 h-4"></i>
+                <span>強制下載雲端資料</span>
+            </button>
+            
             <button onclick="exportAllDataToExcel()" class="w-full flex items-center justify-center space-x-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-3 px-4 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-emerald-500/10">
                 <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
                 <span>匯出活頁 Excel</span>
@@ -1112,6 +1117,8 @@
             closeMemberModal();
             saveToStorage();
             renderMembers();
+
+            autoSyncToCloud();
         }
 
         function editMember(id) {
@@ -1125,6 +1132,8 @@
                 showToast('社員已刪除', 'info');
                 saveToStorage();
                 renderMembers();
+
+                autoSyncToCloud();
             });
         }
 
@@ -1170,6 +1179,8 @@
                 closeDepositModal();
                 saveToStorage();
                 renderMembers();
+
+                autoSyncToCloud();
             }
         }
 
@@ -1423,6 +1434,8 @@
             closeNewSessionModal();
             saveToStorage();
             renderSessions();
+
+            autoSyncToCloud();
         }
 
         function deleteSession(id) {
@@ -1444,6 +1457,8 @@
                 showToast('活動已刪除且退款完畢', 'info');
                 saveToStorage();
                 renderSessions();
+
+                autoSyncToCloud();
             });
         }
 
@@ -1529,6 +1544,8 @@
             closePurchaseModal();
             saveToStorage();
             renderPurchases();
+
+            autoSyncToCloud();
         }
 
         // ----------------------------------------------------
@@ -1731,6 +1748,8 @@
             showToast(`同步完成！已匯入 ${state.members.length} 位社員最新餘額。`, 'success');
             saveToStorage();
             recalculateClubTotals();
+
+            autoSyncToCloud();
         }
 
         function importEngagementCSV(rows) {
@@ -1768,6 +1787,8 @@
             document.getElementById('status-engagement').className = 'text-[10px] bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full font-bold';
             showToast('活動出勤與出席比例勾選對應完成！', 'success');
             saveToStorage();
+
+            autoSyncToCloud();
         }
 
         function importPurchaseRecordCSV(rows) {
@@ -1797,6 +1818,8 @@
             showToast(`已成功同步 ${state.purchases.length} 筆歷史購球紀錄！`, 'success');
             saveToStorage();
             recalculateClubTotals();
+
+            autoSyncToCloud();
         }
 
         // ----------------------------------------------------
@@ -2048,6 +2071,124 @@
             return false;
         }
     }
+
+    // ==========================================
+    // 1. 自動背景上傳至雲端 (不跳 alert 打擾)
+    // ==========================================
+    async function autoSyncToCloud() {
+        const gasUrl = document.getElementById('gas-url').value || localStorage.getItem('gas_url') || "您的預設GAS網址填這裡";
+        if (!gasUrl) return; 
+    
+        // 準備最新資料
+        const payload = {
+            action: "sync_all",
+            // 直接從 state 物件中抓取資料，如果沒有資料則給予空陣列 []
+            members: state.members || [],
+            engagement: state.engagement || [],
+            purchases: state.purchases || []
+        };
+    
+        try {
+            console.log("🔄 資料已變更，背景自動同步中...");
+            const response = await fetch(gasUrl, {
+                method: "POST",
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (result.status === "success") {
+                console.log("✅ 背景同步成功！");
+            }
+        } catch (error) {
+            console.error("❌ 背景同步失敗:", error);
+        }
+    }
+    
+    // ==========================================
+    // 2. 手動強制下載雲端資料 (綁定給剛新增的下載按鈕)
+    // ==========================================
+    async function forceDownloadFromCloud() {
+        const gasUrl = document.getElementById('gas-url').value || localStorage.getItem('gas_url') || "您的預設GAS網址填這裡";
+        if (!gasUrl) {
+            alert("請先確認是否已設定正確的 GAS 網址！");
+            return;
+        }
+    
+        const btn = event.currentTarget;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>下載中...</span>`;
+        btn.classList.add("opacity-75", "cursor-wait");
+    
+        try {
+            const response = await fetch(gasUrl, {
+                method: "POST",
+                body: JSON.stringify({ action: "get_all" })
+            });
+            const data = await response.json();
+            
+            if (data) {
+                // 覆蓋本機變數
+                state.members = data.members || [];
+                state.engagement = data.engagement || [];
+                state.purchases = data.purchases || [];
+                
+                // 存入瀏覽器快取
+                localStorage.setItem('badmin_members', JSON.stringify(members));
+                localStorage.setItem('badmin_engagement', JSON.stringify(engagement));
+                localStorage.setItem('badmin_purchases', JSON.stringify(purchases));
+                
+                // 重新渲染畫面
+                if (typeof renderMembers === 'function') renderMembers();
+                if (typeof renderEngagement === 'function') renderEngagement();
+                if (typeof renderPurchases === 'function') renderPurchases();
+                if (typeof updateDashboard === 'function') updateDashboard();
+                
+                alert("✅ 雲端資料已成功下載並更新至畫面！");
+            }
+        } catch (error) {
+            alert("❌ 下載失敗，請檢查網路連線或 GAS 狀態。");
+            console.error(error);
+        } finally {
+            btn.innerHTML = originalText;
+            btn.classList.remove("opacity-75", "cursor-wait");
+            lucide.createIcons(); // 重新載入 icon
+        }
+    }
+    
+    // ==========================================
+    // 3. 網頁載入時：自動執行一次安靜下載
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', async () => {
+        const gasUrl = document.getElementById('gas-url').value || localStorage.getItem('gas_url') || "您的預設GAS網址填這裡";
+        if (gasUrl) {
+            try {
+                console.log("📥 網頁載入，自動檢查雲端最新資料...");
+                const response = await fetch(gasUrl, {
+                    method: "POST",
+                    body: JSON.stringify({ action: "get_all" })
+                });
+                const data = await response.json();
+                
+                if (data && (data.members || data.engagement || data.purchases)) {
+                    state.members = data.members || [];
+                    state.engagement = data.engagement || [];
+                    state.purchases = data.purchases || [];
+                    
+                    localStorage.setItem('badmin_members', JSON.stringify(members));
+                    localStorage.setItem('badmin_engagement', JSON.stringify(engagement));
+                    localStorage.setItem('badmin_purchases', JSON.stringify(purchases));
+                    
+                    // 觸發畫面更新
+                    if (typeof renderMembers === 'function') renderMembers();
+                    if (typeof renderEngagement === 'function') renderEngagement();
+                    if (typeof renderPurchases === 'function') renderPurchases();
+                    if (typeof updateDashboard === 'function') updateDashboard();
+                    console.log("✅ 開機自動同步完成！");
+                }
+            } catch (error) {
+                console.error("❌ 開機自動同步失敗，將使用本機舊有資料:", error);
+            }
+        }
+    });
     </script>
 </body>
 </html>
