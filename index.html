@@ -1,0 +1,2053 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>中研羽球社 - 財務與用球統計看板</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts Noto Sans TC -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SheetJS (XLSX) CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Mobile-friendly bottom-sheet */
+        .bottom-sheet {
+            transition: transform 0.3s ease-out-in;
+        }
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col pb-20 md:pb-0 md:flex-row">
+
+    <!-- Desktop Sidebar (Hidden on mobile) -->
+    <aside class="hidden md:flex flex-col w-64 bg-slate-900 text-white min-h-screen p-5 shrink-0 border-r border-slate-800">
+        <div class="flex items-center space-x-3 mb-8 px-2">
+            <div class="bg-emerald-500 p-2 rounded-xl text-slate-900">
+                <i data-lucide="award" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg leading-none">中研羽球社</h1>
+                <span class="text-xs text-slate-400">收支與用球管理系統</span>
+            </div>
+        </div>
+        
+        <nav class="flex-1 space-y-1">
+            <button onclick="switchTab('dashboard')" class="nav-btn w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all bg-emerald-500 text-slate-950" id="btn-dashboard">
+                <i data-lucide="pie-chart" class="w-5 h-5"></i>
+                <span>數據看板</span>
+            </button>
+            <button onclick="switchTab('members')" class="nav-btn w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-all" id="btn-members">
+                <i data-lucide="users" class="w-5 h-5"></i>
+                <span>社員帳務餘額</span>
+            </button>
+            <button onclick="switchTab('sessions')" class="nav-btn w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-all" id="btn-sessions">
+                <i data-lucide="calendar" class="w-5 h-5"></i>
+                <span>活動出勤紀錄</span>
+            </button>
+            <button onclick="switchTab('purchases')" class="nav-btn w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-all" id="btn-purchases">
+                <i data-lucide="shopping-bag" class="w-5 h-5"></i>
+                <span>購球與庫存</span>
+            </button>
+            <button onclick="switchTab('sync')" class="nav-btn w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-all" id="btn-sync">
+                <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                <span>Google Sheet 同步</span>
+            </button>
+        </nav>
+        
+        <div class="border-t border-slate-800 pt-4 mt-auto">
+            <button onclick="exportAllDataToExcel()" class="w-full flex items-center justify-center space-x-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-3 px-4 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-emerald-500/10">
+                <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                <span>匯出活頁 Excel</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Mobile Top Bar (Hidden on desktop) -->
+    <header class="md:hidden flex items-center justify-between bg-slate-900 text-white px-5 py-4 sticky top-0 z-30 shadow-md">
+        <div class="flex items-center space-x-2">
+            <div class="bg-emerald-500 p-1.5 rounded-lg text-slate-900">
+                <i data-lucide="award" class="w-5 h-5"></i>
+            </div>
+            <h1 class="font-bold text-md">中研羽球社</h1>
+        </div>
+        <button onclick="exportAllDataToExcel()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 p-2 rounded-xl text-xs font-semibold flex items-center space-x-1 transition-all">
+            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+            <span class="hidden xs:inline">匯出 Excel</span>
+        </button>
+    </header>
+
+    <!-- Main Content Panel -->
+    <main class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+
+        <!-- 1. DASHBOARD TAB -->
+        <section id="tab-dashboard" class="tab-content space-y-6">
+            <!-- Summary KPI Grid -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- KPI 1: Net Balance -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden">
+                    <div class="absolute right-0 top-0 translate-x-3 -translate-y-3 w-16 h-16 bg-emerald-500/5 rounded-full flex items-center justify-center">
+                        <i data-lucide="wallet" class="w-8 h-8 text-emerald-500/20"></i>
+                    </div>
+                    <span class="text-xs font-semibold text-slate-400">社團公帳餘額</span>
+                    <h2 class="text-xl md:text-2xl font-bold text-slate-900 mt-2" id="kpi-balance">$--</h2>
+                    <span class="text-[10px] text-emerald-500 flex items-center mt-1">
+                        <i data-lucide="trending-up" class="w-3 h-3 mr-0.5"></i> 營運公帳資金
+                    </span>
+                </div>
+                <!-- KPI 2: Ball Stock -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden">
+                    <div class="absolute right-0 top-0 translate-x-3 -translate-y-3 w-16 h-16 bg-sky-500/5 rounded-full flex items-center justify-center">
+                        <i data-lucide="package" class="w-8 h-8 text-sky-500/20"></i>
+                    </div>
+                    <span class="text-xs font-semibold text-slate-400">羽球剩餘庫存</span>
+                    <h2 class="text-xl md:text-2xl font-bold text-slate-900 mt-2" id="kpi-stock">-- 顆</h2>
+                    <span class="text-[10px] text-sky-500 flex items-center mt-1">
+                        <i data-lucide="activity" class="w-3 h-3 mr-0.5"></i> 約可再打 -- 次
+                    </span>
+                </div>
+                <!-- KPI 3: Members count -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden">
+                    <div class="absolute right-0 top-0 translate-x-3 -translate-y-3 w-16 h-16 bg-indigo-500/5 rounded-full flex items-center justify-center">
+                        <i data-lucide="users" class="w-8 h-8 text-indigo-500/20"></i>
+                    </div>
+                    <span class="text-xs font-semibold text-slate-400">登記社員數</span>
+                    <h2 class="text-xl md:text-2xl font-bold text-slate-900 mt-2" id="kpi-members">-- 人</h2>
+                    <span class="text-[10px] text-indigo-500 flex items-center mt-1">
+                        <i data-lucide="check" class="w-3 h-3 mr-0.5"></i> 含歷史累計社員
+                    </span>
+                </div>
+                <!-- KPI 4: Total Sessions -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden">
+                    <div class="absolute right-0 top-0 translate-x-3 -translate-y-3 w-16 h-16 bg-amber-500/5 rounded-full flex items-center justify-center">
+                        <i data-lucide="calendar" class="w-8 h-8 text-amber-500/20"></i>
+                    </div>
+                    <span class="text-xs font-semibold text-slate-400">累計活動次數</span>
+                    <h2 class="text-xl md:text-2xl font-bold text-slate-900 mt-2" id="kpi-sessions">-- 次</h2>
+                    <span class="text-[10px] text-amber-500 flex items-center mt-1">
+                        <i data-lucide="history" class="w-3 h-3 mr-0.5"></i> 2026年起至今紀錄
+                    </span>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Main Trend Line Chart -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 lg:col-span-2">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-bold text-slate-800 text-base">歷史用球與消費趨勢</h3>
+                        <span class="text-xs text-slate-400">近10次活動趨勢</span>
+                    </div>
+                    <div class="h-64">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+                <!-- Ball Brand Distribution -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-bold text-slate-800 text-base">購球品牌偏好比例</h3>
+                        <span class="text-xs text-slate-400">採購比例統計</span>
+                    </div>
+                    <div class="h-64 flex items-center justify-center">
+                        <canvas id="brandChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Action Hub (Fast access for phone users) -->
+            <div class="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                <div class="relative z-10 space-y-4">
+                    <h3 class="font-bold text-lg">✨ 手機快速操作捷徑</h3>
+                    <p class="text-slate-300 text-xs">專為手機版管理者設計的最佳操作流程，點點手指，快速記帳點名。</p>
+                    
+                    <div class="pt-2">
+                        <label class="block text-[11px] text-slate-400 mb-1 font-medium">管理者權限認證</label>
+                        <div class="relative flex items-center">
+                            <input type="password" id="dashboard-admin-pwd" placeholder="請輸入管理員密碼以啟用進階功能..." 
+                                class="w-full bg-slate-800/80 border border-slate-700 px-3 py-2 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-all"
+                                oninput="if(this.value==='ibms@badmin2026'){sessionStorage.setItem('admin_session_password', this.value); alert('管理員權限已驗證成功！');}else{sessionStorage.removeItem('admin_session_password');}">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 pt-2">
+                        <button onclick="openNewSessionModal()" class="flex items-center justify-center space-x-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-3 rounded-xl font-semibold text-xs transition-all">
+                            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                            <span>記錄今日打球</span>
+                        </button>
+                        <button onclick="openPurchaseModal()" class="flex items-center justify-center space-x-2 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 py-3 rounded-xl font-semibold text-xs transition-all">
+                            <i data-lucide="shopping-bag" class="w-4 h-4"></i>
+                            <span>登記採購新球</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-2xl"></div>
+            </div>
+        </section>
+
+        <!-- 2. MEMBERS TAB -->
+        <section id="tab-members" class="tab-content hidden space-y-4">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800">社員帳務餘額</h2>
+                    <p class="text-slate-400 text-xs">即時維護全社團人員的預存/欠費金額</p>
+                </div>
+                <!-- Quick Actions -->
+                <div class="flex space-x-2 self-start md:self-auto">
+                    <button onclick="openMemberModal()" class="flex items-center space-x-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all">
+                        <i data-lucide="user-plus" class="w-4 h-4"></i>
+                        <span>新增社員</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filters & Search -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
+                <!-- Search -->
+                <div class="relative md:col-span-2">
+                    <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                    <input type="text" id="memberSearch" placeholder="搜尋社員姓名..." class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all">
+                </div>
+                <!-- Status Filter -->
+                <div>
+                    <select id="memberFilter" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all">
+                        <option value="all">所有社員狀態</option>
+                        <option value="arrears">僅顯示欠費中</option>
+                        <option value="positive">僅顯示有餘額</option>
+                        <option value="active">僅顯示活動中</option>
+                    </select>
+                </div>
+                <!-- Quick Balance Sort -->
+                <div>
+                    <select id="memberSort" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all">
+                        <option value="default">預設排序 (A-Z)</option>
+                        <option value="balance-asc">餘額從低到高</option>
+                        <option value="balance-desc">餘額從高到低</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Member Cards Grid (Responsive Mobile layout) / Table for Desktop -->
+            <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                <!-- Desktop Table View -->
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-100 text-xs font-semibold text-slate-500 uppercase">
+                                <th class="px-6 py-4">社員姓名</th>
+                                <th class="px-6 py-4">聯絡電子郵件</th>
+                                <th class="px-6 py-4">帳戶餘額</th>
+                                <th class="px-6 py-4">狀態</th>
+                                <th class="px-6 py-4 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="memberTableBody" class="divide-y divide-slate-100 text-sm text-slate-700">
+                            <!-- JS Generated -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Mobile Card List View -->
+                <div id="memberCardList" class="block md:hidden divide-y divide-slate-100">
+                    <!-- JS Generated Cards -->
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. SESSIONS TAB -->
+        <section id="tab-sessions" class="tab-content hidden space-y-4">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800">打球活動紀錄</h2>
+                    <p class="text-slate-400 text-xs">記錄每一次羽球活動之消耗球數與出席者</p>
+                </div>
+                <button onclick="openNewSessionModal()" class="flex items-center space-x-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all self-start md:self-auto">
+                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                    <span>登錄打球活動</span>
+                </button>
+            </div>
+
+            <!-- Session Log list -->
+            <div class="space-y-4" id="sessionList">
+                <!-- JS Generated -->
+            </div>
+        </section>
+
+        <!-- 4. PURCHASES TAB -->
+        <section id="tab-purchases" class="tab-content hidden space-y-4">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800">羽球採購與庫存明細</h2>
+                    <p class="text-slate-400 text-xs">追蹤球隊公用球的採買細目與當前折算單顆單價</p>
+                </div>
+                <button onclick="openPurchaseModal()" class="flex items-center space-x-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all self-start md:self-auto">
+                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                    <span>登記羽球採購</span>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Inventory status -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                    <div class="space-y-4">
+                        <h3 class="font-bold text-slate-800 text-sm">🧮 庫存精密折算</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="text-slate-400">累計採購羽球</span>
+                                <span class="font-bold text-slate-700" id="inv-purchased">-- 顆 (約 -- 筒)</span>
+                            </div>
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="text-slate-400">歷史打球消耗</span>
+                                <span class="font-bold text-rose-500" id="inv-consumed">-- 顆</span>
+                            </div>
+                            <hr class="border-slate-100">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm font-semibold text-slate-800">當前可用庫存</span>
+                                <span class="text-lg font-bold text-emerald-500" id="inv-available">-- 顆</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Purchase Table List -->
+                <div class="bg-white rounded-2xl border border-slate-100 shadow-sm lg:col-span-2 overflow-hidden">
+                    <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                        <span class="text-xs font-bold text-slate-500 uppercase">歷史採購帳簿</span>
+                        <span class="text-xs text-slate-400" id="purchase-count">共 -- 筆採購</span>
+                    </div>
+                    <div class="overflow-x-auto max-h-[300px]">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-100 text-[10px] font-semibold text-slate-500 uppercase">
+                                    <th class="px-4 py-3">日期</th>
+                                    <th class="px-4 py-3">品牌</th>
+                                    <th class="px-4 py-3">筒數 / 顆數</th>
+                                    <th class="px-4 py-3">一筒單價</th>
+                                    <th class="px-4 py-3">總金額</th>
+                                    <th class="px-4 py-3">單球折合</th>
+                                </tr>
+                            </thead>
+                            <tbody id="purchaseTableBody" class="divide-y divide-slate-100 text-xs text-slate-600">
+                                <!-- JS Generated -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. GOOGLE SHEET SYNC TAB -->
+        <section id="tab-sync" class="tab-content hidden space-y-6">
+            <div>
+                <h2 class="text-xl font-bold text-slate-800">Google Sheet 雲端歷史資料同步中心</h2>
+                <p class="text-slate-400 text-xs">如果您在 Google Sheets 表格中有修改資料，隨時可以在這裡上傳更新</p>
+            </div>
+            
+            <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4 mt-6">
+                <h3 class="font-bold text-sm text-slate-800 flex items-center">
+                    <i data-lucide="cloud" class="w-4 h-4 text-emerald-500 mr-2"></i> Web App API 自動雙向同步
+                </h3>
+                <p class="text-xs text-slate-500">
+                    請貼上您部署 Google Apps Script 後取得的「網頁應用程式 URL」。這可以取代手動上傳 CSV。
+                </p>
+                <div class="space-y-3">
+                   <div class="flex items-center gap-2">
+                        <input type="text" id="gas-url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all">
+                        
+                        <button onclick="fillDefaultUrl()" class="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all flex-shrink-0" title="輸入密碼帶入預設網址">
+                            <i data-lucide="lock" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 pt-2">
+                        <button onclick="downloadFromCloud()" class="flex items-center justify-center space-x-2 bg-sky-100 hover:bg-sky-200 text-sky-700 py-3 rounded-xl font-semibold text-xs transition-all">
+                            <i data-lucide="cloud-download" class="w-4 h-4"></i>
+                            <span>下載雲端資料 (覆蓋本機)</span>
+                        </button>
+                        <button onclick="syncToCloud()" class="flex items-center justify-center space-x-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 py-3 rounded-xl font-semibold text-xs transition-all">
+                            <i data-lucide="cloud-upload" class="w-4 h-4"></i>
+                            <span>上傳本機資料 (覆蓋雲端)</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Mobile Bottom Navigation Bar (Hidden on desktop) -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 px-2 py-1 z-40 flex justify-around items-center text-[10px] text-slate-400">
+        <button onclick="switchTab('dashboard')" class="mobile-nav-btn flex flex-col items-center py-1.5 px-3 text-emerald-400 font-medium" id="mbtn-dashboard">
+            <i data-lucide="pie-chart" class="w-5 h-5 mb-0.5"></i>
+            <span>數據看板</span>
+        </button>
+        <button onclick="switchTab('members')" class="mobile-nav-btn flex flex-col items-center py-1.5 px-3 text-slate-400" id="mbtn-members">
+            <i data-lucide="users" class="w-5 h-5 mb-0.5"></i>
+            <span>社員帳務</span>
+        </button>
+        <button onclick="switchTab('sessions')" class="mobile-nav-btn flex flex-col items-center py-1.5 px-3 text-slate-400" id="mbtn-sessions">
+            <i data-lucide="calendar" class="w-5 h-5 mb-0.5"></i>
+            <span>活動紀錄</span>
+        </button>
+        <button onclick="switchTab('purchases')" class="mobile-nav-btn flex flex-col items-center py-1.5 px-3 text-slate-400" id="mbtn-purchases">
+            <i data-lucide="shopping-bag" class="w-5 h-5 mb-0.5"></i>
+            <span>購球庫存</span>
+        </button>
+        <button onclick="switchTab('sync')" class="mobile-nav-btn flex flex-col items-center py-1.5 px-3 text-slate-400" id="mbtn-sync">
+            <i data-lucide="refresh-cw" class="w-5 h-5 mb-0.5"></i>
+            <span>同步匯入</span>
+        </button>
+    </nav>
+
+    <!-- ==================== MODALS ==================== -->
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-[90] pointer-events-none flex flex-col space-y-2"></div>
+
+    <!-- Modal 1: Add/Edit Member Modal (Responsive iOS slide up / centered) -->
+    <div id="memberModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-0 md:p-4 hidden">
+        <div class="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl shadow-xl border overflow-hidden max-h-[90vh] flex flex-col transform translate-y-full md:translate-y-0 transition-transform duration-300" id="memberModalContent">
+            <!-- Modal Header -->
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="font-bold text-slate-800 text-base" id="memberModalTitle">新增社員資料</h3>
+                <button onclick="closeMemberModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <!-- Modal Body -->
+            <form onsubmit="handleMemberSubmit(event)" class="p-5 space-y-4 overflow-y-auto">
+                <input type="hidden" id="form-member-id">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1.5">社員姓名 *</label>
+                    <input type="text" id="form-member-name" required placeholder="例如：王小明" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1.5">電子郵件 (選填)</label>
+                    <input type="email" id="form-member-email" placeholder="email@example.com" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1.5">初始帳戶餘額 *</label>
+                    <input type="number" id="form-member-balance" required placeholder="0" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1.5">社員狀態</label>
+                    <select id="form-member-status" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all">
+                        <option value="Active">活動中 (常態打球)</option>
+                        <option value="Inactive">已退社/不活躍</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3 px-4 rounded-xl text-sm transition-all shadow-lg shadow-emerald-500/10">
+                    儲存社員資料
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 2: New Session Modal -->
+    <div id="sessionModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-0 md:p-4 hidden">
+        <div class="bg-white w-full md:max-w-2xl rounded-t-2xl md:rounded-2xl shadow-xl border overflow-hidden max-h-[95vh] md:max-h-[85vh] flex flex-col transform translate-y-full md:translate-y-0 transition-transform duration-300" id="sessionModalContent">
+            <!-- Modal Header -->
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="font-bold text-slate-800 text-base">登錄本次打球活動</h3>
+                <button onclick="closeNewSessionModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <!-- Modal Body -->
+            <form onsubmit="handleSessionSubmit(event)" class="p-5 space-y-4 overflow-y-auto flex-1 flex flex-col">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">活動日期 *</label>
+                        <input type="date" id="form-session-date" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">使用球品牌 *</label>
+                        <select id="form-session-brand" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all" onchange="updateSessionBallUnitPrice()">
+                            <!-- Generated from Purchases -->
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">當日球單價</label>
+                        <input type="number" id="form-session-unitprice" readonly class="w-full px-3 py-2 rounded-xl border border-slate-100 bg-slate-50 text-slate-500 text-sm focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">使用顆數 *</label>
+                        <input type="number" id="form-session-used" required min="1" placeholder="例如：4" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all" oninput="calculateSessionCosts()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">當日打球總額</label>
+                        <input type="number" id="form-session-total" readonly class="w-full px-3 py-2 rounded-xl border border-slate-100 bg-slate-50 text-slate-500 text-sm focus:outline-none">
+                    </div>
+                </div>
+
+                <!-- Touch-friendly Attendance Selector with Weights -->
+                <div class="flex-1 flex flex-col min-h-[220px] border border-slate-100 rounded-2xl p-3 bg-slate-50">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-bold text-slate-600">🙋‍♂️ 點名出席名單與出席比例 (可多選)</span>
+                        <span class="text-[10px] bg-emerald-50 text-slate-950 px-2 py-0.5 rounded-full font-bold" id="form-session-playercount">0 人出席 (共 0 股)</span>
+                    </div>
+                    
+                    <div class="overflow-y-auto flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 pr-1" id="form-session-members-grid">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-100 rounded-xl flex justify-between items-center text-xs">
+                    <span class="text-slate-500 font-medium">每人平均分攤費率 (整場 1.0 股)：</span>
+                    <span class="text-sm font-bold text-emerald-600" id="form-session-avg-cost">$-- 元</span>
+                </div>
+
+                <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3.5 rounded-xl text-sm transition-all shadow-md mt-auto">
+                    登錄活動 (自動扣除出席人餘額)
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 3: Deposit/Charge Modal -->
+    <div id="depositModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-0 md:p-4 hidden">
+        <div class="bg-white w-full md:max-w-sm rounded-t-2xl md:rounded-2xl shadow-xl border overflow-hidden max-h-[90vh] flex flex-col transform translate-y-full md:translate-y-0 transition-transform duration-300" id="depositModalContent">
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="font-bold text-slate-800 text-base">儲值 / 繳款登錄</h3>
+                <button onclick="closeDepositModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form onsubmit="handleDepositSubmit(event)" class="p-5 space-y-4">
+                <input type="hidden" id="form-deposit-member-id">
+                <div class="p-3.5 bg-slate-50 rounded-xl flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-full bg-emerald-50/10 text-emerald-600 flex items-center justify-center font-bold text-sm">
+                        👤
+                    </div>
+                    <div>
+                        <div class="font-bold text-sm text-slate-800" id="deposit-member-name">--</div>
+                        <div class="text-[10px] text-slate-400">目前餘額: <span id="deposit-member-curr-bal">$--</span></div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1.5">繳費儲值金額 ($) *</label>
+                    <input type="number" id="form-deposit-amount" required placeholder="請輸入繳款金額，如: 500" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all">
+                </div>
+                <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3.5 rounded-xl text-sm transition-all">
+                    確定儲值
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 4: Purchase Badminton Modal -->
+    <div id="purchaseModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-0 md:p-4 hidden">
+        <div class="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl shadow-xl border overflow-hidden max-h-[90vh] flex flex-col transform translate-y-full md:translate-y-0 transition-transform duration-300" id="purchaseModalContent">
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="font-bold text-slate-800 text-base">採購羽球登記</h3>
+                <button onclick="closePurchaseModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form onsubmit="handlePurchaseSubmit(event)" class="p-5 space-y-4 overflow-y-auto">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1.5">採購日期 *</label>
+                        <input type="date" id="form-pur-date" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1.5">羽球品牌 *</label>
+                        <input type="text" id="form-pur-brand" required placeholder="例如: NCS Pro, VM1" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1.5">採購筒數 *</label>
+                        <input type="number" id="form-pur-dozen" required min="1" placeholder="例如: 3" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all" oninput="calculatePurchaseTotals()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1.5">每筒單價 *</label>
+                        <input type="number" id="form-pur-unitprice" required placeholder="例如: 675" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all" oninput="calculatePurchaseTotals()">
+                    </div>
+                </div>
+
+                <div class="p-3.5 bg-slate-50 rounded-xl space-y-2">
+                    <div class="flex justify-between items-center text-xs text-slate-500">
+                        <span>折合總顆數：</span>
+                        <span class="font-bold text-slate-800" id="form-pur-calc-count">0 顆 (1筒12顆)</span>
+                    </div>
+                    <div class="flex justify-between items-center text-xs text-slate-500">
+                        <span>單顆羽球折合：</span>
+                        <span class="font-bold text-slate-800" id="form-pur-calc-perball">$-- 元/顆</span>
+                    </div>
+                    <hr class="border-slate-100">
+                    <div class="flex justify-between items-center text-sm font-semibold text-slate-800">
+                        <span>採購實付總金額 *</span>
+                        <input type="number" id="form-pur-total" required class="w-28 text-right px-2 py-1 bg-white border border-slate-200 rounded-lg text-emerald-600 font-bold focus:outline-none">
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3.5 rounded-xl text-sm transition-all shadow-md">
+                    登錄採購項目
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Custom Elegant Warning/Confirmation Dialog Modal (Replaces native confirm/alert) -->
+    <div id="customDialogModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 hidden">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-xl border p-6 space-y-4 transform scale-95 opacity-0 transition-all duration-300" id="customDialogContent">
+            <div class="flex items-start space-x-3">
+                <div class="p-2 bg-amber-50 rounded-xl text-amber-500" id="customDialogIcon">
+                    <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h4 class="font-bold text-slate-800 text-base" id="customDialogTitle">確認操作</h4>
+                    <p class="text-xs text-slate-500 mt-1" id="customDialogMessage">您確定要執行此操作嗎？</p>
+                </div>
+            </div>
+            <div class="flex space-x-3 justify-end pt-2">
+                <button id="customDialogCancelBtn" class="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all">
+                    取消
+                </button>
+                <button id="customDialogConfirmBtn" class="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-slate-950 transition-all">
+                    確定
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================== JAVASCRIPT LOGIC ==================== -->
+    <script>
+        // ----------------------------------------------------
+        // 1. DATA PRE-LOADING (Real extracted values from CSVs)
+        // ----------------------------------------------------
+        
+        let state = {
+            members: [
+                { id: "1", name: "淳繡 (Stella)", balance: 1547, email: "stella@sinica.edu.tw", status: "Active" },
+                { id: "2", name: "昱秀", balance: 170, email: "", status: "Active" },
+                { id: "3", name: "宗緯 (Galen)", balance: 24, email: "", status: "Active" },
+                { id: "4", name: "小熊", balance: 669, email: "", status: "Active" },
+                { id: "5", name: "Rajeev", balance: -261, email: "", status: "Active" },
+                { id: "6", name: "William", balance: -267, email: "", status: "Active" },
+                { id: "7", name: "DEE", balance: 16, email: "", status: "Active" },
+                { id: "8", name: "Angela", balance: 703, email: "", status: "Active" },
+                { id: "9", name: "Tina", balance: 1561, email: "", status: "Active" },
+                { id: "10", name: "YFTan", balance: -232, email: "", status: "Active" },
+                { id: "11", name: "Marvin", balance: -157, email: "", status: "Active" },
+                { id: "12", name: "Srimayee", balance: 824, email: "", status: "Active" },
+                { id: "13", name: "何露露", balance: 342, email: "", status: "Active" },
+                { id: "14", name: "凱倫", balance: 113, email: "", status: "Active" },
+                { id: "15", name: "艾妮 (Annie)", balance: 857, email: "", status: "Active" },
+                { id: "16", name: "婕儒", balance: 229, email: "", status: "Active" },
+                { id: "17", name: "仁豪", balance: 180, email: "", status: "Active" },
+                { id: "18", name: "高希", balance: -52, email: "", status: "Active" },
+                { id: "19", name: "昱庭", balance: 96, email: "", status: "Active" },
+                { id: "20", name: "Andy", balance: -46, email: "", status: "Active" },
+                { id: "21", name: "Bernice Wang", balance: 966, email: "", status: "Active" },
+                { id: "22", name: "Zoe Chen", balance: 171, email: "", status: "Active" },
+                { id: "23", name: "孟謙 (Leo)", balance: -34, email: "", status: "Active" },
+                { id: "24", name: "愛玉", balance: 5, email: "", status: "Active" },
+                { id: "25", name: "愷修", balance: 109, email: "", status: "Active" },
+                { id: "26", name: "Naga", balance: -68, email: "", status: "Active" },
+                { id: "27", name: "Robby", balance: -126, email: "", status: "Active" },
+                { id: "28", name: "婉淳", balance: 45, email: "", status: "Active" },
+                { id: "29", name: "麗偉", balance: 120, email: "", status: "Active" },
+                { id: "30", name: "世穎", balance: 80, email: "", status: "Active" },
+                { id: "31", name: "汝婷", balance: 150, email: "", status: "Active" },
+                { id: "32", name: "MK", balance: 1863, email: "", status: "Active" },
+                { id: "33", name: "Imtiaz", balance: 2169, email: "", status: "Active" },
+                { id: "34", name: "Mahzoon", balance: 2549, email: "", status: "Active" }
+            ],
+            purchases: [
+                { date: "2025-11-22", brand: "NCS Pro", dozen: 3, count: 36, unitPrice: 675, total: 2085, avgPrice: 58 },
+                { date: "2025-07-23", brand: "VM1", dozen: 5, count: 60, unitPrice: 1155, total: 5810, avgPrice: 97 },
+                { date: "2025-05-08", brand: "VM1", dozen: 2, count: 24, unitPrice: 1135, total: 2315, avgPrice: 96 },
+                { date: "2025-05-08", brand: "RSL5", dozen: 2, count: 24, unitPrice: 750, total: 1545, avgPrice: 64 },
+                { date: "2024-12-10", brand: "VM1", dozen: 3, count: 36, unitPrice: 980, total: 2985, avgPrice: 83 },
+                { date: "2024-10-11", brand: "Lark", dozen: 4, count: 48, unitPrice: 400, total: 1645, avgPrice: 34 },
+                { date: "2024-08-15", brand: "VM1", dozen: 3, count: 36, unitPrice: 980, total: 2985, avgPrice: 83 },
+                { date: "2024-05-05", brand: "VM1", dozen: 3, count: 36, unitPrice: 870, total: 2655, avgPrice: 74 },
+                { date: "2023-11-20", brand: "VM1", dozen: 4, count: 48, unitPrice: 780, total: 3165, avgPrice: 66 },
+                { date: "2023-04-14", brand: "VM1", dozen: 6, count: 72, unitPrice: 780, total: 4740, avgPrice: 66 }
+            ],
+            sessions: [
+                {
+                    id: "s1",
+                    date: "2026-01-30",
+                    brand: "NCS Pro",
+                    unitPrice: 58,
+                    used: 4,
+                    playersCount: 7,
+                    sumOfWeights: 7,
+                    totalCost: 232,
+                    avgCost: 33,
+                    players: ["淳繡 (Stella)", "小熊", "Bernice Wang", "MK", "Imtiaz", "Mahzoon", "高希"],
+                    playerWeights: { "淳繡 (Stella)": 1, "小熊": 1, "Bernice Wang": 1, "MK": 1, "Imtiaz": 1, "Mahzoon": 1, "高希": 1 }
+                },
+                {
+                    id: "s2",
+                    date: "2026-01-09",
+                    brand: "NCS Pro",
+                    unitPrice: 58,
+                    used: 6,
+                    playersCount: 12,
+                    sumOfWeights: 12,
+                    totalCost: 348,
+                    avgCost: 29,
+                    players: ["淳繡 (Stella)", "昱秀", "宗緯 (Galen)", "小熊", "Angela", "Tina", "Srimayee", "何露露", "凱倫", "艾妮 (Annie)", "婕儒", "仁豪"],
+                    playerWeights: { "淳繡 (Stella)": 1, "昱秀": 1, "宗緯 (Galen)": 1, "小熊": 1, "Angela": 1, "Tina": 1, "Srimayee": 1, "何露露": 1, "凱倫": 1, "艾妮 (Annie)": 1, "婕儒": 1, "仁豪": 1 }
+                },
+                {
+                    id: "s3",
+                    date: "2025-11-22",
+                    brand: "NCS Pro",
+                    unitPrice: 58,
+                    used: 5,
+                    playersCount: 10,
+                    sumOfWeights: 10,
+                    totalCost: 290,
+                    avgCost: 29,
+                    players: ["淳繡 (Stella)", "宗緯 (Galen)", "小熊", "Angela", "Tina", "凱倫", "艾妮 (Annie)", "婕儒", "仁豪", "高希"],
+                    playerWeights: { "淳繡 (Stella)": 1, "宗緯 (Galen)": 1, "小熊": 1, "Angela": 1, "Tina": 1, "凱倫": 1, "艾妮 (Annie)": 1, "婕儒": 1, "仁豪": 1, "高希": 1 }
+                },
+                {
+                    id: "s4",
+                    date: "2025-07-23",
+                    brand: "VM1",
+                    unitPrice: 97,
+                    used: 4,
+                    playersCount: 8,
+                    sumOfWeights: 8,
+                    totalCost: 388,
+                    avgCost: 49,
+                    players: ["淳繡 (Stella)", "昱秀", "小熊", "William", "DEE", "Angela", "Tina", "Marvin"],
+                    playerWeights: { "淳繡 (Stella)": 1, "昱秀": 1, "小熊": 1, "William": 1, "DEE": 1, "Angela": 1, "Tina": 1, "Marvin": 1 }
+                },
+                {
+                    id: "s5",
+                    date: "2025-05-08",
+                    brand: "VM1",
+                    unitPrice: 96,
+                    used: 6,
+                    playersCount: 11,
+                    sumOfWeights: 11,
+                    totalCost: 576,
+                    avgCost: 52,
+                    players: ["淳繡 (Stella)", "宗緯 (Galen)", "小熊", "Rajeev", "William", "Tina", "YFTan", "Marvin", "何露露", "凱倫", "艾妮 (Annie)"],
+                    playerWeights: { "淳繡 (Stella)": 1, "宗緯 (Galen)": 1, "小熊": 1, "Rajeev": 1, "William": 1, "Tina": 1, "YFTan": 1, "Marvin": 1, "何露露": 1, "凱倫": 1, "艾妮 (Annie)": 1 }
+                }
+            ]
+        };
+
+        let trendChartInstance = null;
+        let brandChartInstance = null;
+
+        // ----------------------------------------------------
+        // 2. TABS MANAGEMENT & APP INITS
+        // ----------------------------------------------------
+        window.addEventListener('load', () => {
+            lucide.createIcons();
+            loadState();
+            switchTab('dashboard');
+            
+            // Listeners for searches & filters
+            document.getElementById('memberSearch').addEventListener('input', renderMembers);
+            document.getElementById('memberFilter').addEventListener('change', renderMembers);
+            document.getElementById('memberSort').addEventListener('change', renderMembers);
+        });
+
+        function loadState() {
+            const saved = localStorage.getItem('badminton_club_state_v4');
+            if (saved) {
+                try {
+                    state = JSON.parse(saved);
+                } catch(e) {
+                    console.error("Failed loading local storage", e);
+                }
+            }
+            recalculateClubTotals();
+        }
+
+        function saveToStorage() {
+            localStorage.setItem('badminton_club_state_v4', JSON.stringify(state));
+            recalculateClubTotals();
+        }
+
+        function switchTab(tabId) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+            // Un-highlight all nav buttons
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-emerald-500', 'text-slate-950');
+                btn.classList.add('text-slate-300', 'hover:bg-slate-800');
+            });
+            document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+                btn.classList.remove('text-emerald-400');
+                btn.classList.add('text-slate-400');
+            });
+
+            // Show selected
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            
+            // Highlight active button (Desktop)
+            const activeBtn = document.getElementById(`btn-${tabId}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('text-slate-300', 'hover:bg-slate-800');
+                activeBtn.classList.add('bg-emerald-500', 'text-slate-950');
+            }
+            // Highlight active button (Mobile)
+            const activeMobileBtn = document.getElementById(`mbtn-${tabId}`);
+            if (activeMobileBtn) {
+                activeMobileBtn.classList.remove('text-slate-400');
+                activeMobileBtn.classList.add('text-emerald-400');
+            }
+
+            // Tab specific initializers
+            if (tabId === 'dashboard') {
+                renderCharts();
+            } else if (tabId === 'members') {
+                renderMembers();
+            } else if (tabId === 'sessions') {
+                renderSessions();
+            } else if (tabId === 'purchases') {
+                renderPurchases();
+            }
+        }
+
+        // ----------------------------------------------------
+        // 3. STATS & RECALCULATIONS
+        // ----------------------------------------------------
+        function recalculateClubTotals() {
+            // Calculated values
+            const netBalance = state.members.reduce((sum, m) => sum + (parseFloat(m.balance) || 0), 0);
+            const totalPurchasedBalls = state.purchases.reduce((sum, p) => sum + (parseInt(p.count) || 0), 0);
+            const totalConsumedBalls = state.sessions.reduce((sum, s) => sum + (parseInt(s.used) || 0), 0);
+            const availableStock = Math.max(0, totalPurchasedBalls - totalConsumedBalls);
+            
+            // Update Dashboard KPIs
+            document.getElementById('kpi-balance').innerText = `$${netBalance.toLocaleString()}`;
+            document.getElementById('kpi-stock').innerText = `${availableStock} 顆`;
+            document.getElementById('kpi-members').innerText = `${state.members.length} 人`;
+            document.getElementById('kpi-sessions').innerText = `${state.sessions.length} 次`;
+
+            const estSessionsRemaining = availableStock > 0 && state.sessions.length > 0 
+                ? Math.round(availableStock / (totalConsumedBalls / state.sessions.length))
+                : '--';
+            document.getElementById('kpi-stock').nextElementSibling.innerHTML = `<i data-lucide="activity" class="w-3 h-3 mr-0.5"></i> 約可再打 ${estSessionsRemaining} 次`;
+
+            // Update Purchase tab KPIs
+            const totalDozens = Math.round(totalPurchasedBalls / 12);
+            document.getElementById('inv-purchased').innerText = `${totalPurchasedBalls} 顆 (約 ${totalDozens} 筒)`;
+            document.getElementById('inv-consumed').innerText = `${totalConsumedBalls} 顆`;
+            document.getElementById('inv-available').innerText = `${availableStock} 顆`;
+            document.getElementById('purchase-count').innerText = `共 ${state.purchases.length} 筆採購`;
+
+            lucide.createIcons();
+        }
+
+        // ----------------------------------------------------
+        // 4. CHART BUILDERS
+        // ----------------------------------------------------
+        function renderCharts() {
+            // Trend Line Chart (Last 10 sessions)
+            const recentSessions = [...state.sessions].reverse().slice(-10);
+            const trendLabels = recentSessions.map(s => s.date.slice(5)); // Show MM-DD
+            const usageData = recentSessions.map(s => s.used);
+            const avgCostData = recentSessions.map(s => s.avgCost);
+
+            if (trendChartInstance) trendChartInstance.destroy();
+            const ctxTrend = document.getElementById('trendChart').getContext('2d');
+            trendChartInstance = new Chart(ctxTrend, {
+                type: 'bar',
+                data: {
+                    labels: trendLabels,
+                    datasets: [
+                        {
+                            label: '使用球數 (顆)',
+                            data: usageData,
+                            backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                            borderColor: 'rgba(16, 185, 129, 1)',
+                            borderWidth: 2,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: '每人平均分攤 ($)',
+                            data: avgCostData,
+                            type: 'line',
+                            borderColor: 'rgba(99, 102, 241, 1)',
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.3,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
+                    },
+                    scales: {
+                        y: { position: 'left', title: { display: true, text: '消耗用球 (顆)', font: { size: 10 } } },
+                        y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '分攤金額 ($)', font: { size: 10 } } }
+                    }
+                }
+            });
+
+            // Brand Donut Chart
+            const brands = {};
+            state.purchases.forEach(p => {
+                brands[p.brand] = (brands[p.brand] || 0) + p.dozen;
+            });
+            const brandLabels = Object.keys(brands);
+            const brandData = Object.values(brands);
+
+            if (brandChartInstance) brandChartInstance.destroy();
+            const ctxBrand = document.getElementById('brandChart').getContext('2d');
+            brandChartInstance = new Chart(ctxBrand, {
+                type: 'doughnut',
+                data: {
+                    labels: brandLabels,
+                    datasets: [{
+                        data: brandData,
+                        backgroundColor: [
+                            'rgba(16, 185, 129, 0.75)',
+                            'rgba(99, 102, 241, 0.75)',
+                            'rgba(245, 158, 11, 0.75)',
+                            'rgba(239, 68, 68, 0.75)',
+                            'rgba(14, 165, 233, 0.75)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } }
+                    }
+                }
+            });
+        }
+
+        // ----------------------------------------------------
+        // 5. MEMBER TAB ACTIONS & RENDERING
+        // ----------------------------------------------------
+        function renderMembers() {
+            const query = document.getElementById('memberSearch').value.toLowerCase();
+            const filter = document.getElementById('memberFilter').value;
+            const sort = document.getElementById('memberSort').value;
+
+            let filtered = state.members.filter(m => {
+                const matchesSearch = m.name.toLowerCase().includes(query);
+                if (!matchesSearch) return false;
+
+                const balanceVal = parseFloat(m.balance) || 0;
+                if (filter === 'arrears') return balanceVal < 0;
+                if (filter === 'positive') return balanceVal > 0;
+                if (filter === 'active') return m.status === 'Active';
+                return true;
+            });
+
+            // Sort logic
+            if (sort === 'balance-asc') {
+                filtered.sort((a, b) => (parseFloat(a.balance) || 0) - (parseFloat(b.balance) || 0));
+            } else if (sort === 'balance-desc') {
+                filtered.sort((a, b) => (parseFloat(b.balance) || 0) - (parseFloat(a.balance) || 0));
+            } else {
+                filtered.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+            }
+
+            // Desktop Table Rendering
+            const tableBody = document.getElementById('memberTableBody');
+            tableBody.innerHTML = '';
+            filtered.forEach(m => {
+                const balanceVal = parseFloat(m.balance) || 0;
+                const isArrear = balanceVal < 0;
+                const balanceClass = isArrear ? 'text-rose-500 font-bold' : 'text-emerald-600 font-bold';
+                const statusBadge = m.status === 'Active' 
+                    ? '<span class="px-2.5 py-0.5 text-[10px] bg-emerald-50 text-emerald-700 rounded-full font-semibold border border-emerald-100">常態活動</span>'
+                    : '<span class="px-2.5 py-0.5 text-[10px] bg-slate-100 text-slate-500 rounded-full font-semibold border border-slate-200">不活躍</span>';
+                
+                tableBody.innerHTML += `
+                    <tr class="hover:bg-slate-50/50 transition-all">
+                        <td class="px-6 py-4 font-semibold text-slate-800">${m.name}</td>
+                        <td class="px-6 py-4 text-slate-400 text-xs">${m.email || '未提供'}</td>
+                        <td class="px-6 py-4 ${balanceClass}">$${balanceVal.toLocaleString()}</td>
+                        <td class="px-6 py-4">${statusBadge}</td>
+                        <td class="px-6 py-4 text-right space-x-1.5">
+                            <button onclick="openDepositModal('${m.id}')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs py-1.5 px-3 rounded-lg border border-emerald-200 transition-all">
+                                儲值繳費
+                            </button>
+                            <button onclick="editMember('${m.id}')" class="text-slate-400 hover:text-slate-600 p-2 rounded-lg hover:bg-slate-100 transition-all inline-flex items-center">
+                                <i data-lucide="edit-3" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="deleteMember('${m.id}')" class="text-rose-400 hover:text-rose-600 p-2 rounded-lg hover:bg-rose-50 transition-all inline-flex items-center">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            // Mobile Card List Rendering (Responsive View)
+            const cardList = document.getElementById('memberCardList');
+            cardList.innerHTML = '';
+            filtered.forEach(m => {
+                const balanceVal = parseFloat(m.balance) || 0;
+                const isArrear = balanceVal < 0;
+                const balColor = isArrear ? 'text-rose-500' : 'text-emerald-600';
+                cardList.innerHTML += `
+                    <div class="p-4 flex justify-between items-center bg-white">
+                        <div class="space-y-1">
+                            <div class="flex items-center space-x-2">
+                                <span class="font-bold text-slate-800 text-sm">${m.name}</span>
+                                ${m.status !== 'Active' ? '<span class="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-400">休眠</span>' : ''}
+                            </div>
+                            <div class="text-[10px] text-slate-400">${m.email || '無 Email'}</div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="text-right">
+                                <span class="block text-xs font-semibold text-slate-400">可用餘額</span>
+                                <span class="text-sm font-bold ${balColor}">$${balanceVal}</span>
+                            </div>
+                            <div class="flex flex-col space-y-1">
+                                <button onclick="openDepositModal('${m.id}')" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-3 py-2 rounded-xl transition-all shadow-sm">
+                                    儲值
+                                </button>
+                                <button onclick="editMember('${m.id}')" class="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg border border-slate-100 inline-flex justify-center items-center">
+                                    <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            lucide.createIcons();
+        }
+
+        // Add / Edit Member Forms
+        function openMemberModal(id = null) {
+            if (!checkAdminPermission()) return;
+            const modal = document.getElementById('memberModal');
+            const content = document.getElementById('memberModalContent');
+            modal.classList.remove('hidden');
+            
+            // Trigger animation
+            setTimeout(() => {
+                content.classList.remove('translate-y-full');
+            }, 50);
+
+            if (id) {
+                const m = state.members.find(x => x.id === id);
+                document.getElementById('memberModalTitle').innerText = '編輯社員資料';
+                document.getElementById('form-member-id').value = m.id;
+                document.getElementById('form-member-name').value = m.name;
+                document.getElementById('form-member-email').value = m.email;
+                document.getElementById('form-member-balance').value = m.balance;
+                document.getElementById('form-member-status').value = m.status;
+            } else {
+                document.getElementById('memberModalTitle').innerText = '新增社員資料';
+                document.getElementById('form-member-id').value = '';
+                document.getElementById('form-member-name').value = '';
+                document.getElementById('form-member-email').value = '';
+                document.getElementById('form-member-balance').value = '';
+                document.getElementById('form-member-status').value = 'Active';
+            }
+        }
+
+        function closeMemberModal() {
+            const modal = document.getElementById('memberModal');
+            const content = document.getElementById('memberModalContent');
+            content.classList.add('translate-y-full');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function handleMemberSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('form-member-id').value;
+            const name = document.getElementById('form-member-name').value;
+            const email = document.getElementById('form-member-email').value;
+            const balance = parseInt(document.getElementById('form-member-balance').value) || 0;
+            const status = document.getElementById('form-member-status').value;
+
+            if (id) {
+                // Edit
+                const mIdx = state.members.findIndex(x => x.id === id);
+                if (mIdx !== -1) {
+                    state.members[mIdx] = { ...state.members[mIdx], name, email, balance, status };
+                    showToast('已更新社員資料', 'success');
+                }
+            } else {
+                // Add new
+                const newId = (state.members.length + 1).toString();
+                state.members.push({ id: newId, name, email, balance, status });
+                showToast('已新增社員成員', 'success');
+            }
+
+            closeMemberModal();
+            saveToStorage();
+            renderMembers();
+        }
+
+        function editMember(id) {
+            openMemberModal(id);
+        }
+
+        function deleteMember(id) {
+            if (!checkAdminPermission()) return;
+            openCustomConfirm("您確定要刪除該社員嗎？這不會還原歷史紀錄中的出席扣款。", () => {
+                state.members = state.members.filter(x => x.id !== id);
+                showToast('社員已刪除', 'info');
+                saveToStorage();
+                renderMembers();
+            });
+        }
+
+        // ----------------------------------------------------
+        // 6. DEPOSIT / CHARGE ACTIONS
+        // ----------------------------------------------------
+        function openDepositModal(id) {
+            if (!checkAdminPermission()) return;
+            const m = state.members.find(x => x.id === id);
+            if (!m) return;
+
+            document.getElementById('form-deposit-member-id').value = m.id;
+            document.getElementById('deposit-member-name').innerText = m.name;
+            document.getElementById('deposit-member-curr-bal').innerText = `$${m.balance}`;
+            document.getElementById('form-deposit-amount').value = '';
+
+            const modal = document.getElementById('depositModal');
+            const content = document.getElementById('depositModalContent');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                content.classList.remove('translate-y-full');
+            }, 50);
+        }
+
+        function closeDepositModal() {
+            const modal = document.getElementById('depositModal');
+            const content = document.getElementById('depositModalContent');
+            content.classList.add('translate-y-full');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function handleDepositSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('form-deposit-member-id').value;
+            const amount = parseInt(document.getElementById('form-deposit-amount').value);
+
+            const mIdx = state.members.findIndex(x => x.id === id);
+            if (mIdx !== -1) {
+                state.members[mIdx].balance += amount;
+                showToast(`已成功為 ${state.members[mIdx].name} 儲值 $${amount}`, 'success');
+                closeDepositModal();
+                saveToStorage();
+                renderMembers();
+            }
+        }
+
+        // ----------------------------------------------------
+        // 7. SESSIONS RENDER & FORM HANDLERS
+        // ----------------------------------------------------
+        function renderSessions() {
+            const list = document.getElementById('sessionList');
+            list.innerHTML = '';
+
+            if (state.sessions.length === 0) {
+                list.innerHTML = `
+                    <div class="bg-white p-10 text-center rounded-2xl border border-dashed border-slate-200">
+                        <span class="text-slate-400 text-sm">目前無任何活動登錄，點選右上方按鈕新增！</span>
+                    </div>
+                `;
+                return;
+            }
+
+            state.sessions.forEach(s => {
+                const getPlayerWeightStr = (name) => {
+                    if (!s.playerWeights) return '';
+                    const w = s.playerWeights[name];
+                    if (w === undefined || w === 1) return '';
+                    return ` (${w === 0.5 ? '半場' : '倍數:' + w})`;
+                };
+
+                const totalShares = s.sumOfWeights || s.playersCount;
+
+                list.innerHTML += `
+                    <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div class="space-y-2 flex-1">
+                            <div class="flex items-center space-x-3">
+                                <span class="bg-emerald-50 text-emerald-800 text-xs px-2.5 py-1 rounded-lg font-bold">${s.date}</span>
+                                <span class="font-bold text-slate-800 text-sm flex items-center">
+                                    <i data-lucide="package" class="w-4 h-4 text-slate-400 mr-1"></i> ${s.brand} (每球單價: $${s.unitPrice})
+                                </span>
+                            </div>
+                            <div class="text-xs text-slate-500">
+                                今日使用 <b>${s.used} 顆球</b>，總費用 <b>$${s.totalCost} 元</b>，由 <b>${s.playersCount} 人 (${totalShares} 股)</b> 拆算。
+                            </div>
+                            <!-- Attendance list badge container -->
+                            <div class="flex flex-wrap gap-1 mt-2">
+                                ${s.players.map(p => `<span class="bg-slate-100 text-slate-600 text-[10px] px-2 py-0.5 rounded-full">${p}${getPlayerWeightStr(p)}</span>`).join('')}
+                            </div>
+                        </div>
+
+                        <div class="flex md:flex-col items-end justify-between md:justify-center border-t md:border-t-0 border-slate-100 pt-3 md:pt-0 shrink-0">
+                            <div class="text-right">
+                                <span class="text-[10px] text-slate-400 font-semibold uppercase block">整場基準分攤 (1.0股)</span>
+                                <span class="text-lg font-extrabold text-indigo-600">$${s.avgCost}</span>
+                            </div>
+                            <button onclick="deleteSession('${s.id}')" class="text-rose-400 hover:text-rose-600 p-1.5 hover:bg-rose-50 rounded-lg transition-all md:mt-2">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            lucide.createIcons();
+        }
+
+        let selectedSessionWeights = {};
+
+        function openNewSessionModal() {
+            if (!checkAdminPermission()) return;
+            // Setup brands selection
+            const brandSelect = document.getElementById('form-session-brand');
+            brandSelect.innerHTML = '';
+            
+            // Get unique brands from purchases
+            const brands = [...new Set(state.purchases.map(p => p.brand))];
+            if (brands.length === 0) {
+                showToast('請先完成一次購球採購登記後，才能開始打球記帳！', 'error');
+                switchTab('purchases');
+                return;
+            }
+
+            brands.forEach(b => {
+                brandSelect.innerHTML += `<option value="${b}">${b}</option>`;
+            });
+
+            // Set today
+            document.getElementById('form-session-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('form-session-used').value = '';
+            document.getElementById('form-session-total').value = '';
+            document.getElementById('form-session-avg-cost').innerText = '$-- 元';
+            document.getElementById('form-session-playercount').innerText = '0 人出席 (共 0 股)';
+
+            selectedSessionWeights = {};
+            updateSessionBallUnitPrice();
+
+            // Populate Checkable Member Attendance Grid
+            const grid = document.getElementById('form-session-members-grid');
+            grid.innerHTML = '';
+            
+            // Render selection boxes with drop downs for active members
+            state.members.filter(m => m.status === 'Active').forEach(m => {
+                selectedSessionWeights[m.name] = 0; // Default: absent
+
+                grid.innerHTML += `
+                    <div id="attendance-card-${m.id}" class="attendance-item bg-white p-2.5 border border-slate-200 rounded-xl flex items-center justify-between transition-all hover:bg-slate-50 select-none">
+                        <span class="text-xs font-semibold text-slate-700 truncate pr-1" title="${m.name}">${m.name}</span>
+                        <select onchange="updatePlayerWeight('${m.name}', this.value, 'attendance-card-${m.id}')" class="bg-slate-50 text-slate-700 font-semibold text-xs rounded-lg px-1.5 py-1 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                            <option value="0" selected>未出席</option>
+                            <option value="0.5">0.5 (僅半場)</option>
+                            <option value="1">1.0 (整場)</option>
+                            <option value="2">2.0 (多帶1朋)</option>
+                            <option value="3">3.0 (多帶2朋)</option>
+                        </select>
+                    </div>
+                `;
+            });
+
+            const modal = document.getElementById('sessionModal');
+            const content = document.getElementById('sessionModalContent');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                content.classList.remove('translate-y-full');
+            }, 50);
+        }
+
+        function closeNewSessionModal() {
+            const modal = document.getElementById('sessionModal');
+            const content = document.getElementById('sessionModalContent');
+            content.classList.add('translate-y-full');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function updatePlayerWeight(name, value, cardId) {
+            const weight = parseFloat(value) || 0;
+            selectedSessionWeights[name] = weight;
+
+            const el = document.getElementById(cardId);
+            if (el) {
+                if (weight > 0) {
+                    el.classList.add('border-emerald-500', 'bg-emerald-50/20');
+                    el.classList.remove('border-slate-200', 'bg-white');
+                } else {
+                    el.classList.remove('border-emerald-500', 'bg-emerald-50/20');
+                    el.classList.add('border-slate-200', 'bg-white');
+                }
+            }
+
+            // Count attending individuals and total weight shares
+            let attendingCount = 0;
+            let totalWeights = 0;
+            for (const [n, w] of Object.entries(selectedSessionWeights)) {
+                if (w > 0) {
+                    attendingCount++;
+                    totalWeights += w;
+                }
+            }
+
+            document.getElementById('form-session-playercount').innerText = `${attendingCount} 人出席 (共 ${totalWeights} 股)`;
+            calculateSessionCosts();
+        }
+
+        function updateSessionBallUnitPrice() {
+            const brand = document.getElementById('form-session-brand').value;
+            // Find newest purchase with this brand to match average cost
+            const p = state.purchases.find(x => x.brand === brand);
+            if (p) {
+                document.getElementById('form-session-unitprice').value = p.avgPrice;
+            } else {
+                document.getElementById('form-session-unitprice').value = 50; // default fallback
+            }
+            calculateSessionCosts();
+        }
+
+        function calculateSessionCosts() {
+            const unitPrice = parseInt(document.getElementById('form-session-unitprice').value) || 0;
+            const used = parseInt(document.getElementById('form-session-used').value) || 0;
+            const total = used * unitPrice;
+            document.getElementById('form-session-total').value = total;
+
+            let totalWeights = 0;
+            for (const [n, w] of Object.entries(selectedSessionWeights)) {
+                if (w > 0) {
+                    totalWeights += w;
+                }
+            }
+
+            if (totalWeights > 0 && total > 0) {
+                const avg = Math.round(total / totalWeights);
+                document.getElementById('form-session-avg-cost').innerText = `$${avg} 元 (1.0股) / $${Math.round(avg * 0.5)} 元 (0.5股)`;
+            } else {
+                document.getElementById('form-session-avg-cost').innerText = '$-- 元';
+            }
+        }
+
+        function handleSessionSubmit(e) {
+            e.preventDefault();
+            const date = document.getElementById('form-session-date').value;
+            const brand = document.getElementById('form-session-brand').value;
+            const unitPrice = parseInt(document.getElementById('form-session-unitprice').value);
+            const used = parseInt(document.getElementById('form-session-used').value);
+            const totalCost = used * unitPrice;
+            
+            const attendingPlayers = [];
+            const playerWeights = {};
+            let sumOfWeights = 0;
+
+            for (const [name, weight] of Object.entries(selectedSessionWeights)) {
+                if (weight > 0) {
+                    attendingPlayers.push(name);
+                    playerWeights[name] = weight;
+                    sumOfWeights += weight;
+                }
+            }
+
+            if (attendingPlayers.length === 0) {
+                showToast('請至少選擇一名出席的社員分攤！', 'error');
+                return;
+            }
+
+            const avgCost = Math.round(totalCost / sumOfWeights);
+
+            // Deduct from member balances proportionally based on their weight
+            attendingPlayers.forEach(name => {
+                const mIdx = state.members.findIndex(m => m.name === name);
+                if (mIdx !== -1) {
+                    const w = playerWeights[name];
+                    state.members[mIdx].balance -= Math.round(avgCost * w);
+                }
+            });
+
+            // Add session log
+            const sessionObj = {
+                id: 's_' + Date.now(),
+                date,
+                brand,
+                unitPrice,
+                used,
+                playersCount: attendingPlayers.length,
+                sumOfWeights: sumOfWeights,
+                totalCost,
+                avgCost,
+                players: [...attendingPlayers],
+                playerWeights: playerWeights
+            };
+
+            state.sessions.unshift(sessionObj);
+            showToast('活動登錄成功，社員分攤費扣除完成！', 'success');
+            
+            selectedSessionWeights = {};
+
+            closeNewSessionModal();
+            saveToStorage();
+            renderSessions();
+        }
+
+        function deleteSession(id) {
+            if (!checkAdminPermission()) return;
+            openCustomConfirm("刪除此活動紀錄將會退還該次活動分攤金額（依當初設定比例）至各社員帳戶，確定嗎？", () => {
+                const s = state.sessions.find(x => x.id === id);
+                if (!s) return;
+
+                // Refund based on weights recorded
+                s.players.forEach(name => {
+                    const mIdx = state.members.findIndex(m => m.name === name);
+                    if (mIdx !== -1) {
+                        const weight = (s.playerWeights && s.playerWeights[name] !== undefined) ? s.playerWeights[name] : 1;
+                        state.members[mIdx].balance += Math.round(s.avgCost * weight);
+                    }
+                });
+
+                state.sessions = state.sessions.filter(x => x.id !== id);
+                showToast('活動已刪除且退款完畢', 'info');
+                saveToStorage();
+                renderSessions();
+            });
+        }
+
+        // ----------------------------------------------------
+        // 8. PURCHASE & INVENTORY MANAGEMENT
+        // ----------------------------------------------------
+        function renderPurchases() {
+            const tableBody = document.getElementById('purchaseTableBody');
+            tableBody.innerHTML = '';
+
+            state.purchases.forEach(p => {
+                tableBody.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition-all border-b border-slate-50">
+                        <td class="px-4 py-3 font-semibold text-slate-800">${p.date}</td>
+                        <td class="px-4 py-3"><span class="bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded text-[10px]">${p.brand}</span></td>
+                        <td class="px-4 py-3">${p.dozen} 筒 / ${p.count} 顆</td>
+                        <td class="px-4 py-3">$${p.unitPrice}</td>
+                        <td class="px-4 py-3 font-semibold text-slate-700">$${p.total.toLocaleString()}</td>
+                        <td class="px-4 py-3 text-emerald-600 font-bold">$${p.avgPrice}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function openPurchaseModal() {
+            if (!checkAdminPermission()) return;
+            document.getElementById('form-pur-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('form-pur-brand').value = '';
+            document.getElementById('form-pur-dozen').value = '';
+            document.getElementById('form-pur-unitprice').value = '';
+            document.getElementById('form-pur-total').value = '';
+            document.getElementById('form-pur-calc-count').innerText = '0 顆';
+            document.getElementById('form-pur-calc-perball').innerText = '$-- 元';
+
+            const modal = document.getElementById('purchaseModal');
+            const content = document.getElementById('purchaseModalContent');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                content.classList.remove('translate-y-full');
+            }, 50);
+        }
+
+        function closePurchaseModal() {
+            const modal = document.getElementById('purchaseModal');
+            const content = document.getElementById('purchaseModalContent');
+            content.classList.add('translate-y-full');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function calculatePurchaseTotals() {
+            const dozen = parseInt(document.getElementById('form-pur-dozen').value) || 0;
+            const unitPrice = parseInt(document.getElementById('form-pur-unitprice').value) || 0;
+            const count = dozen * 12;
+            const total = dozen * unitPrice; // estimate total
+
+            document.getElementById('form-pur-calc-count').innerText = `${count} 顆 (1筒12顆)`;
+            document.getElementById('form-pur-total').value = total;
+
+            if (count > 0 && total > 0) {
+                const avgPrice = Math.round(total / count);
+                document.getElementById('form-pur-calc-perball').innerText = `$${avgPrice} 元/顆`;
+            } else {
+                document.getElementById('form-pur-calc-perball').innerText = '$-- 元';
+            }
+        }
+
+        function handlePurchaseSubmit(e) {
+            e.preventDefault();
+            const date = document.getElementById('form-pur-date').value;
+            const brand = document.getElementById('form-pur-brand').value;
+            const dozen = parseInt(document.getElementById('form-pur-dozen').value);
+            const unitPrice = parseInt(document.getElementById('form-pur-unitprice').value);
+            const total = parseInt(document.getElementById('form-pur-total').value);
+            const count = dozen * 12;
+            const avgPrice = Math.round(total / count);
+
+            const pObj = { date, brand, dozen, count, unitPrice, total, avgPrice };
+            state.purchases.unshift(pObj);
+
+            showToast(`成功登記採購 ${brand} ${dozen}筒！`, 'success');
+            closePurchaseModal();
+            saveToStorage();
+            renderPurchases();
+        }
+
+        // ----------------------------------------------------
+        // 9. EXCEL EXPORT (Using SheetJS - True multi-sheet workbook)
+        // ----------------------------------------------------
+        function exportAllDataToExcel() {
+            showToast('正在產生活頁 Excel...', 'info');
+
+            // Workbook initialization
+            const wb = XLSX.utils.book_new();
+
+            // SHEET 1: Member Accounts Balance
+            const membersWSData = state.members.map(m => ({
+                "姓名 (Name)": m.name,
+                "帳號餘額 (Balance)": parseFloat(m.balance) || 0,
+                "活動狀態 (Status)": m.status === 'Active' ? '活動中' : '不活躍',
+                "聯絡電子郵件 (Email)": m.email || ''
+            }));
+            const wsMembers = XLSX.utils.json_to_sheet(membersWSData);
+            XLSX.utils.book_append_sheet(wb, wsMembers, "會員帳務餘額");
+
+            // SHEET 2: Activity Logs
+            const sessionsWSData = state.sessions.map(s => {
+                const getPlayerWeightStr = (name) => {
+                    if (!s.playerWeights) return '';
+                    const w = s.playerWeights[name];
+                    if (w === undefined || w === 1) return '';
+                    return ` (${w === 0.5 ? '半場' : 'x' + w})`;
+                };
+                return {
+                    "打球日期 (Date)": s.date,
+                    "羽球品牌 (Brand)": s.brand,
+                    "單球折算金額": parseInt(s.unitPrice) || 0,
+                    "打球用球數 (Balls)": parseInt(s.used) || 0,
+                    "出席人數 (Players)": parseInt(s.playersCount) || 0,
+                    "出席總股數": parseFloat(s.sumOfWeights) || parseFloat(s.playersCount) || 0,
+                    "當日總消費金額": parseInt(s.totalCost) || 0,
+                    "每人平均分攤費 (整場基準)": parseInt(s.avgCost) || 0,
+                    "出席者清單與比例": s.players.map(p => `${p}${getPlayerWeightStr(p)}`).join(', ')
+                };
+            });
+            const wsSessions = XLSX.utils.json_to_sheet(sessionsWSData);
+            XLSX.utils.book_append_sheet(wb, wsSessions, "每次活動紀錄");
+
+            // SHEET 3: Purchase Details
+            const purchasesWSData = state.purchases.map(p => ({
+                "採買日期 (Date)": p.date,
+                "採購品牌 (Brand)": p.brand,
+                "採購筒數 (Dozens)": parseInt(p.dozen) || 0,
+                "實算顆數": parseInt(p.count) || 0,
+                "一筒單價": parseInt(p.unitPrice) || 0,
+                "採購實付總金額": parseInt(p.total) || 0,
+                "折算單球費用 (Avg)": parseInt(p.avgPrice) || 0
+            }));
+            const wsPurchases = XLSX.utils.json_to_sheet(purchasesWSData);
+            XLSX.utils.book_append_sheet(wb, wsPurchases, "購球採買明細");
+
+            // Trigger true XLSX file download
+            XLSX.writeFile(wb, "中研羽球社_公帳與用球統計資料表.xlsx");
+            showToast('Excel 下載已成功啟動！', 'success');
+        }
+
+        // ----------------------------------------------------
+        // 10. GOOGLE SHEET CSV FILE IMPORT PARSER
+        // ----------------------------------------------------
+        function handleCSVUpload(input, type) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.readAsText(file, "UTF-8");
+            reader.onload = function (evt) {
+                const text = evt.target.result;
+                const rows = parseCSVToArray(text);
+                
+                if (type === 'member') {
+                    importMemberRecordCSV(rows);
+                } else if (type === 'engagement') {
+                    importEngagementCSV(rows);
+                } else if (type === 'purchase') {
+                    importPurchaseRecordCSV(rows);
+                }
+            };
+        }
+
+        // Standard CSV Parser with Quotes handles
+        function parseCSVToArray(text) {
+            let lines = [];
+            let row = [""];
+            let inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                let c = text[i];
+                let next = text[i+1];
+                if (c === '"') {
+                    if (inQuotes && next === '"') {
+                        row[row.length - 1] += '"';
+                        i++;
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (c === ',' && !inQuotes) {
+                    row.push("");
+                } else if ((c === '\r' || c === '\n') && !inQuotes) {
+                    if (c === '\r' && next === '\n') { i++; }
+                    lines.push(row);
+                    row = [""];
+                } else {
+                    row[row.length - 1] += c;
+                }
+            }
+            if (row.length > 1 || row[0] !== "") {
+                lines.push(row);
+            }
+            return lines;
+        }
+
+        function importMemberRecordCSV(rows) {
+            if (rows.length < 2) {
+                showToast('無效的 Member Record CSV', 'error');
+                return;
+            }
+
+            const headers = rows[0].map(h => h.replace(/["\r\n]/g, '').trim());
+            // Find columns indices
+            const dateIdx = headers.indexOf('日期\n(Date)') !== -1 ? headers.indexOf('日期\n(Date)') : headers.findIndex(h => h.includes('日期'));
+            const brandIdx = headers.findIndex(h => h.includes('品牌'));
+            const priceIdx = headers.findIndex(h => h.includes('單價') || h.includes('Unit price'));
+            const usedIdx = headers.findIndex(h => h.includes('用球數'));
+            const playersIdx = headers.findIndex(h => h.includes('人數'));
+            const costIdx = headers.findIndex(h => h.includes('當天金額'));
+            const avgIdx = headers.findIndex(h => h.includes('每人平均') || h.includes('Avg'));
+
+            const sumIdx = headers.findIndex(h => h.includes('總和') || h.includes('sum'));
+            
+            if (dateIdx === -1 || sumIdx === -1) {
+                showToast('CSV 欄位結構不相符，請確認是 Member Record 分頁匯出檔案', 'error');
+                return;
+            }
+
+            const memberNames = [];
+            for (let i = avgIdx + 1; i < sumIdx; i++) {
+                if (headers[i]) {
+                    memberNames.push({ index: i, name: headers[i].replace(/\r?\n/g, ' ').trim() });
+                }
+            }
+
+            const sessionsParsed = [];
+            const activeMemberMap = {};
+
+            for (let r = 1; r < rows.length; r++) {
+                const row = rows[r];
+                if (!row || !row[dateIdx] || row[dateIdx].trim() === '') continue;
+
+                const date = row[dateIdx].replace(/"/g, '').trim();
+                const brand = row[brandIdx] ? row[brandIdx].replace(/"/g, '').trim() : 'NCS Pro';
+                const unitPrice = parseInt(row[priceIdx]) || 50;
+                const used = parseInt(row[usedIdx]) || 0;
+                const playersCount = parseInt(row[playersIdx]) || 0;
+                const totalCost = parseInt(row[costIdx]) || 0;
+                const avgCost = parseInt(row[avgIdx]) || 0;
+
+                if (used > 0) {
+                    sessionsParsed.push({
+                        id: `import_s_${r}`,
+                        date,
+                        brand,
+                        unitPrice,
+                        used,
+                        playersCount,
+                        sumOfWeights: playersCount, // Default fallback
+                        totalCost,
+                        avgCost,
+                        players: [],
+                        playerWeights: {}
+                    });
+                }
+
+                if (r === 1) {
+                    memberNames.forEach(m => {
+                        const bal = parseInt(row[m.index]) || 0;
+                        activeMemberMap[m.name] = {
+                            id: `m_${m.index}`,
+                            name: m.name,
+                            balance: bal,
+                            email: '',
+                            status: 'Active'
+                        };
+                    });
+                }
+            }
+
+            state.members = Object.values(activeMemberMap);
+            if (sessionsParsed.length > 0) {
+                state.sessions = sessionsParsed.slice(0, 50);
+            }
+
+            document.getElementById('status-member').innerText = '✅ 已成功同步';
+            document.getElementById('status-member').className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full font-bold';
+            
+            showToast(`同步完成！已匯入 ${state.members.length} 位社員最新餘額。`, 'success');
+            saveToStorage();
+            recalculateClubTotals();
+        }
+
+        function importEngagementCSV(rows) {
+            if (rows.length < 2) return;
+            const headers = rows[0].map(h => h.replace(/["\r\n]/g, '').trim());
+            const sumIdx = headers.findIndex(h => h.includes('總和') || h.includes('sum'));
+            
+            for (let r = 1; r < rows.length; r++) {
+                const row = rows[r];
+                if (!row || !row[0]) continue;
+                const date = row[0].replace(/"/g, '').trim();
+
+                const sIdx = state.sessions.findIndex(s => s.date === date);
+                if (sIdx !== -1) {
+                    const players = [];
+                    const playerWeights = {};
+                    let totalWeights = 0;
+
+                    for (let i = 1; i < sumIdx; i++) {
+                        const val = parseFloat(row[i]) || 0;
+                        if (val > 0 && headers[i]) {
+                            const name = headers[i].replace(/\r?\n/g, ' ').trim();
+                            players.push(name);
+                            playerWeights[name] = val; // Direct weight mapping (e.g. 0.5, 1, 2)
+                            totalWeights += val;
+                        }
+                    }
+                    state.sessions[sIdx].players = players;
+                    state.sessions[sIdx].playerWeights = playerWeights;
+                    state.sessions[sIdx].sumOfWeights = totalWeights;
+                }
+            }
+
+            document.getElementById('status-engagement').innerText = '✅ 已出席比對完成';
+            document.getElementById('status-engagement').className = 'text-[10px] bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full font-bold';
+            showToast('活動出勤與出席比例勾選對應完成！', 'success');
+            saveToStorage();
+        }
+
+        function importPurchaseRecordCSV(rows) {
+            if (rows.length < 2) return;
+            const parsedPurchases = [];
+            for (let r = 1; r < rows.length; r++) {
+                const row = rows[r];
+                if (!row || !row[0] || row[0].trim() === '') continue;
+
+                parsedPurchases.push({
+                    date: row[0].replace(/"/g, '').trim(),
+                    brand: row[1] ? row[1].replace(/"/g, '').trim() : 'Unknown',
+                    dozen: parseInt(row[2]) || 0,
+                    count: parseInt(row[3]) || 0,
+                    unitPrice: parseInt(row[4]) || 0,
+                    total: parseInt(row[5]) || 0,
+                    avgPrice: parseInt(row[6]) || 0
+                });
+            }
+
+            if (parsedPurchases.length > 0) {
+                state.purchases = parsedPurchases;
+            }
+
+            document.getElementById('status-purchase').innerText = '✅ 採購明細已匯入';
+            document.getElementById('status-purchase').className = 'text-[10px] bg-amber-100 text-amber-800 px-2 py-1 rounded-full font-bold';
+            showToast(`已成功同步 ${state.purchases.length} 筆歷史購球紀錄！`, 'success');
+            saveToStorage();
+            recalculateClubTotals();
+        }
+
+        // ----------------------------------------------------
+        // 11. CUSTOM TOAST SYSTEM (Replaces native alerts)
+        // ----------------------------------------------------
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `flex items-center space-x-2 bg-white px-4 py-3 rounded-xl shadow-lg border text-xs font-semibold transform translate-y-2 opacity-0 transition-all duration-300 pointer-events-auto max-w-sm`;
+            
+            let icon = '';
+            if (type === 'success') {
+                toast.classList.add('border-emerald-100', 'text-emerald-800');
+                icon = `<i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i>`;
+            } else if (type === 'error') {
+                toast.classList.add('border-rose-100', 'text-rose-800');
+                icon = `<i data-lucide="alert-triangle" class="w-4 h-4 text-rose-500"></i>`;
+            } else {
+                toast.classList.add('border-indigo-100', 'text-indigo-800');
+                icon = `<i data-lucide="info" class="w-4 h-4 text-indigo-500"></i>`;
+            }
+
+            toast.innerHTML = `${icon}<span>${message}</span>`;
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            // Animate in
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 50);
+
+            // Remove
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    
+        // ==================== GAS 雲端同步邏輯 ====================
+
+        // 讀取資料庫 (GET) - 覆蓋本機
+        function downloadFromCloud() {
+            if (!checkAdminPermission()) return;
+            const url = document.getElementById('gas-url').value.trim();
+            if (!url) return openCustomAlert('請先輸入您的 GAS Web App URL！', '提示');
+            
+            openCustomConfirm('確定要從雲端下載資料嗎？這將會覆蓋您本機瀏覽器目前的所有紀錄。', () => {
+                showToast("正在從雲端下載資料...", "info");
+
+                // 使用 POST 呼叫 action: get_all 以取得完整資料
+                fetch(url, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: "get_all" }),
+                    headers: { 'Content-Type': 'text/plain' }
+                })
+                .then(res => res.json())
+                .then(response => {
+                    if (response.status === 'success') {
+                        // 修正：將雲端取回的 members, sessions(engagement), purchases 整合裝回 state
+                        const cloudState = {
+                            members: response.members || [],
+                            purchases: response.purchases || [],
+                            sessions: response.engagement || response.sessions || [] // 相容雙向名稱
+                        };
+
+                        // 進行強制的型態安全轉換，防範 NaN 錯誤
+                        cloudState.members.forEach(m => {
+                            m.balance = parseInt(m.balance) || 0;
+                        });
+                        cloudState.purchases.forEach(p => {
+                            p.dozen = parseInt(p.dozen) || 0;
+                            p.count = parseInt(p.count) || 0;
+                            p.unitPrice = parseInt(p.unitPrice) || 0;
+                            p.total = parseInt(p.total) || 0;
+                            p.avgPrice = parseInt(p.avgPrice) || 0;
+                        });
+                        cloudState.sessions.forEach(s => {
+                            s.unitPrice = parseInt(s.unitPrice) || 0;
+                            s.used = parseInt(s.used) || 0;
+                            s.playersCount = parseInt(s.playersCount) || 0;
+                            s.sumOfWeights = parseFloat(s.sumOfWeights) || parseFloat(s.playersCount) || 0;
+                            s.totalCost = parseInt(s.totalCost) || 0;
+                            s.avgCost = parseInt(s.avgCost) || 0;
+                        });
+
+                        localStorage.setItem('badminton_club_state_v4', JSON.stringify(cloudState));
+                        
+                        openCustomAlert('資料下載成功！畫面將重新載入以顯示最新數據。', '成功');
+                        setTimeout(() => {
+                            window.location.reload(); 
+                        }, 1500);
+                    } else {
+                        openCustomAlert('下載失敗：' + (response.message || '未知錯誤'), '錯誤');
+                    }
+                })
+                .catch(err => {
+                    console.error("Fetch 錯誤:", err);
+                    openCustomAlert('發生錯誤，請檢查 URL 網址是否正確，或確認您的網路狀態。', '錯誤');
+                });
+            }, '確認下載');
+        }
+
+        // 全同步覆蓋資料庫 (POST) - 覆蓋雲端
+        function syncToCloud() {
+            if (!checkAdminPermission()) return;
+            const url = document.getElementById('gas-url').value.trim();
+            if (!url) return openCustomAlert('請先輸入您的 GAS Web App URL！', '提示');
+
+            openCustomConfirm('確定要將本機資料上傳嗎？這將會覆蓋 Google Sheet 上的紀錄。', () => {
+                showToast("正在打包並上傳資料...", "info");
+
+                const syncMembers = (typeof state !== 'undefined' && state.members && state.members.length > 0)
+                    ? state.members 
+                    : [];
+
+                const syncSessions = (typeof state !== 'undefined' && state.sessions && state.sessions.length > 0)
+                    ? state.sessions 
+                    : [];
+
+                const syncPurchases = (typeof state !== 'undefined' && state.purchases && state.purchases.length > 0)
+                    ? state.purchases 
+                    : [];
+
+                const payload = {
+                    action: "sync_all",
+                    members: syncMembers,
+                    engagement: syncSessions, 
+                    purchases: syncPurchases
+                };
+
+                fetch(url, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    headers: { 'Content-Type': 'text/plain' } // 避開 CORS 預檢請求限制
+                })
+                .then(res => res.json())
+                .then(res => {
+                    if(res.status === 'success') {
+                        openCustomAlert('上傳成功！資料已完全覆蓋至您的 Google Sheet。', '成功');
+                    } else {
+                        openCustomAlert('上傳失敗：' + (res.message || '未知錯誤'), '錯誤');
+                    }
+                })
+                .catch(err => {
+                    console.error("Fetch 錯誤:", err);
+                    openCustomAlert('發生錯誤，請檢查 URL 網址是否正確，或確認您的網路狀態。', '錯誤');
+                });
+            }, '確認上傳');
+        }
+
+        // ==================== 自訂對話視窗系統 (Replaces native alerts) ====================
+        let customDialogCallback = null;
+
+        function openCustomConfirm(message, callback, title = "確認操作") {
+            document.getElementById('customDialogTitle').innerText = title;
+            document.getElementById('customDialogMessage').innerText = message;
+            document.getElementById('customDialogCancelBtn').classList.remove('hidden');
+            
+            const modal = document.getElementById('customDialogModal');
+            const content = document.getElementById('customDialogContent');
+            
+            customDialogCallback = callback;
+            
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+            }, 50);
+        }
+
+        function openCustomAlert(message, title = "提示訊息") {
+            document.getElementById('customDialogTitle').innerText = title;
+            document.getElementById('customDialogMessage').innerText = message;
+            document.getElementById('customDialogCancelBtn').classList.add('hidden'); // 隱藏取消按鈕
+            
+            const modal = document.getElementById('customDialogModal');
+            const content = document.getElementById('customDialogContent');
+            
+            customDialogCallback = null; // Alert 不需要回呼
+            
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+            }, 50);
+        }
+
+        function fillDateInput(id, value) {
+            // 確保日期字串正確解析成 YYYY-MM-DD 純文字格式
+            if (value) {
+                try {
+                    let dateStr = value;
+                    if (value.includes('T')) {
+                        dateStr = value.split('T')[0];
+                    }
+                    document.getElementById(id).value = dateStr;
+                } catch(e) {
+                    document.getElementById(id).value = value;
+                }
+            }
+        }
+
+        function closeCustomDialog() {
+            const modal = document.getElementById('customDialogModal');
+            const content = document.getElementById('customDialogContent');
+            content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // 綁定對話框按鈕事件
+        document.getElementById('customDialogCancelBtn').addEventListener('click', closeCustomDialog);
+        document.getElementById('customDialogConfirmBtn').addEventListener('click', () => {
+            closeCustomDialog();
+            if (customDialogCallback) {
+                customDialogCallback();
+            }
+        });
+
+        function fillDefaultUrl() {
+            // 預設的 Google Apps Script Web App 網址
+            const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbx9jJYdlQ9v6kJlHTURZViX5AQ_7KmOEGLyfffVfUgCQVDDBvk4jApv2mLl-knyvFFt/exec"; 
+
+            // 使用統一的權限檢查機制（如果看版已輸入過會直接通過，沒輸入過則會跳 Prompt 提示）
+            if (checkAdminPermission()) {
+                // 驗證成功，直接幫管理者填入網址
+                document.getElementById('gas-url').value = DEFAULT_GAS_URL;
+            }
+        }
+    
+    const ADMIN_PASSWORD = "ibms@badmin2026";
+
+    // 驗證密碼的共用函式
+    function checkAdminPermission() {
+        const savedPassword = sessionStorage.getItem('admin_session_password');
+        if (savedPassword === ADMIN_PASSWORD) {
+            return true;
+        }
+        
+        // 如果未登入或錯誤，直接跳出 Prompt 要求輸入
+        const userInput = prompt("此操作為管理者專屬功能，請輸入管理員密碼：");
+        if (userInput === ADMIN_PASSWORD) {
+            sessionStorage.setItem('admin_session_password', userInput);
+            // 更新數據看板上的密碼輸入框狀態
+            const inputField = document.getElementById('dashboard-admin-pwd');
+            if (inputField) inputField.value = userInput;
+            return true;
+        } else {
+            alert("密碼錯誤，拒絕存取此功能！");
+            return false;
+        }
+    }
+    </script>
+</body>
+</html>
