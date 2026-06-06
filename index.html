@@ -376,7 +376,10 @@
                 </p>
                 <div class="space-y-3">
                    <div class="flex items-center gap-2">
-                        <input type="text" id="gas-url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all">
+                        <input type="text" id="gas-url" 
+                            placeholder="https://script.google.com/macros/s/.../exec" 
+                            onchange="localStorage.setItem('gas_url', this.value)"
+                            class="w-full px-4 py-2.5 rounded-xl...">
                         
                         <button onclick="fillDefaultUrl()" class="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all flex-shrink-0" title="輸入密碼帶入預設網址">
                             <i data-lucide="lock" class="w-4 h-4"></i>
@@ -1106,19 +1109,19 @@
                 if (mIdx !== -1) {
                     state.members[mIdx] = { ...state.members[mIdx], name, email, balance, status };
                     showToast('已更新社員資料', 'success');
+                    autoSyncToCloud();
                 }
             } else {
                 // Add new
                 const newId = (state.members.length + 1).toString();
                 state.members.push({ id: newId, name, email, balance, status });
+                autoSyncToCloud();
                 showToast('已新增社員成員', 'success');
             }
 
             closeMemberModal();
             saveToStorage();
             renderMembers();
-
-            autoSyncToCloud();
         }
 
         function editMember(id) {
@@ -1129,11 +1132,10 @@
             if (!checkAdminPermission()) return;
             openCustomConfirm("您確定要刪除該社員嗎？這不會還原歷史紀錄中的出席扣款。", () => {
                 state.members = state.members.filter(x => x.id !== id);
+                autoSyncToCloud();
                 showToast('社員已刪除', 'info');
                 saveToStorage();
                 renderMembers();
-
-                autoSyncToCloud();
             });
         }
 
@@ -1176,11 +1178,10 @@
             if (mIdx !== -1) {
                 state.members[mIdx].balance += amount;
                 showToast(`已成功為 ${state.members[mIdx].name} 儲值 $${amount}`, 'success');
+                autoSyncToCloud();
                 closeDepositModal();
                 saveToStorage();
                 renderMembers();
-
-                autoSyncToCloud();
             }
         }
 
@@ -1427,6 +1428,7 @@
             };
 
             state.sessions.unshift(sessionObj);
+            autoSyncToCloud();
             showToast('活動登錄成功，社員分攤費扣除完成！', 'success');
             
             selectedSessionWeights = {};
@@ -1434,8 +1436,6 @@
             closeNewSessionModal();
             saveToStorage();
             renderSessions();
-
-            autoSyncToCloud();
         }
 
         function deleteSession(id) {
@@ -1454,11 +1454,10 @@
                 });
 
                 state.sessions = state.sessions.filter(x => x.id !== id);
+                autoSyncToCloud();
                 showToast('活動已刪除且退款完畢', 'info');
                 saveToStorage();
                 renderSessions();
-
-                autoSyncToCloud();
             });
         }
 
@@ -1539,13 +1538,12 @@
 
             const pObj = { date, brand, dozen, count, unitPrice, total, avgPrice };
             state.purchases.unshift(pObj);
+            autoSyncToCloud();
 
             showToast(`成功登記採購 ${brand} ${dozen}筒！`, 'success');
             closePurchaseModal();
             saveToStorage();
             renderPurchases();
-
-            autoSyncToCloud();
         }
 
         // ----------------------------------------------------
@@ -1744,12 +1742,11 @@
 
             document.getElementById('status-member').innerText = '✅ 已成功同步';
             document.getElementById('status-member').className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full font-bold';
-            
+            autoSyncToCloud();
+
             showToast(`同步完成！已匯入 ${state.members.length} 位社員最新餘額。`, 'success');
             saveToStorage();
             recalculateClubTotals();
-
-            autoSyncToCloud();
         }
 
         function importEngagementCSV(rows) {
@@ -1782,13 +1779,12 @@
                     state.sessions[sIdx].sumOfWeights = totalWeights;
                 }
             }
+            autoSyncToCloud();
 
             document.getElementById('status-engagement').innerText = '✅ 已出席比對完成';
             document.getElementById('status-engagement').className = 'text-[10px] bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full font-bold';
             showToast('活動出勤與出席比例勾選對應完成！', 'success');
             saveToStorage();
-
-            autoSyncToCloud();
         }
 
         function importPurchaseRecordCSV(rows) {
@@ -1812,14 +1808,13 @@
             if (parsedPurchases.length > 0) {
                 state.purchases = parsedPurchases;
             }
+            autoSyncToCloud();
 
             document.getElementById('status-purchase').innerText = '✅ 採購明細已匯入';
             document.getElementById('status-purchase').className = 'text-[10px] bg-amber-100 text-amber-800 px-2 py-1 rounded-full font-bold';
             showToast(`已成功同步 ${state.purchases.length} 筆歷史購球紀錄！`, 'success');
             saveToStorage();
             recalculateClubTotals();
-
-            autoSyncToCloud();
         }
 
         // ----------------------------------------------------
@@ -2076,15 +2071,14 @@
     // 1. 自動背景上傳至雲端 (不跳 alert 打擾)
     // ==========================================
     async function autoSyncToCloud() {
-        const gasUrl = document.getElementById('gas-url').value || localStorage.getItem('gas_url') || "您的預設GAS網址填這裡";
+        const gasUrl = document.getElementById('gas-url').value || localStorage.getItem('gas_url') || "https://script.google.com/macros/s/AKfycbx9jJYdlQ9v6kJlHTURZViX5AQ_7KmOEGLyfffVfUgCQVDDBvk4jApv2mLl-knyvFFt/exec";
         if (!gasUrl) return; 
     
-        // 準備最新資料
+        // 準備最新資料 (修正變數：state.sessions 對應到後端的 engagement)
         const payload = {
             action: "sync_all",
-            // 直接從 state 物件中抓取資料，如果沒有資料則給予空陣列 []
             members: state.members || [],
-            engagement: state.engagement || [],
+            engagement: state.sessions || [], 
             purchases: state.purchases || []
         };
     
@@ -2092,7 +2086,11 @@
             console.log("🔄 資料已變更，背景自動同步中...");
             const response = await fetch(gasUrl, {
                 method: "POST",
-                body: JSON.stringify(payload)
+                headers: {
+                    "Content-Type": "text/plain;charset=utf-8",
+                },
+                body: JSON.stringify(payload),
+                redirect: "follow" 
             });
             const result = await response.json();
             if (result.status === "success") {
@@ -2104,12 +2102,12 @@
     }
     
     // ==========================================
-    // 2. 手動強制下載雲端資料 (綁定給剛新增的下載按鈕)
+    // 2. 手動強制下載雲端資料
     // ==========================================
     async function forceDownloadFromCloud() {
-        const gasUrl = document.getElementById('gas-url').value || localStorage.getItem('gas_url') || "您的預設GAS網址填這裡";
+        const gasUrl = document.getElementById('gas-url').value || localStorage.getItem('gas_url') || "https://script.google.com/macros/s/AKfycbx9jJYdlQ9v6kJlHTURZViX5AQ_7KmOEGLyfffVfUgCQVDDBvk4jApv2mLl-knyvFFt/exec";
         if (!gasUrl) {
-            alert("請先確認是否已設定正確的 GAS 網址！");
+            showToast("請先確認是否已設定正確的 GAS 網址！", "error");
             return;
         }
     
@@ -2121,31 +2119,38 @@
         try {
             const response = await fetch(gasUrl, {
                 method: "POST",
-                body: JSON.stringify({ action: "get_all" })
+                headers: {
+                    "Content-Type": "text/plain;charset=utf-8",
+                },
+                body: JSON.stringify({ action: "get_all" }),
+                redirect: "follow" 
             });
             const data = await response.json();
             
-            if (data) {
-                // 覆蓋本機變數
+            if (data && (data.members || data.engagement || data.purchases)) {
+                // 修正變數映射：將後端的 engagement 存回本機的 state.sessions
                 state.members = data.members || [];
-                state.engagement = data.engagement || [];
+                state.sessions = data.engagement || data.sessions || [];
                 state.purchases = data.purchases || [];
                 
-                // 存入瀏覽器快取
-                localStorage.setItem('badmin_members', JSON.stringify(members));
-                localStorage.setItem('badmin_engagement', JSON.stringify(engagement));
-                localStorage.setItem('badmin_purchases', JSON.stringify(purchases));
+                // 修正存檔邏輯：呼叫統一存檔方法，不使用散裝 LocalStorage
+                saveToStorage();
                 
-                // 重新渲染畫面
+                // 修正畫面更新：呼叫正確存在的渲染函數
                 if (typeof renderMembers === 'function') renderMembers();
-                if (typeof renderEngagement === 'function') renderEngagement();
+                if (typeof renderSessions === 'function') renderSessions(); 
                 if (typeof renderPurchases === 'function') renderPurchases();
-                if (typeof updateDashboard === 'function') updateDashboard();
                 
-                alert("✅ 雲端資料已成功下載並更新至畫面！");
+                // 確保 Dashboard 統計數據和圖表也能同步更新
+                recalculateClubTotals();
+                if (!document.getElementById('tab-dashboard').classList.contains('hidden')) {
+                    renderCharts();
+                }
+                
+                showToast("✅ 雲端資料已成功下載並更新至畫面！", "success");
             }
         } catch (error) {
-            alert("❌ 下載失敗，請檢查網路連線或 GAS 狀態。");
+            showToast("❌ 下載失敗，請檢查網路連線或 GAS 狀態。", "error");
             console.error(error);
         } finally {
             btn.innerHTML = originalText;
@@ -2157,31 +2162,44 @@
     // ==========================================
     // 3. 網頁載入時：自動執行一次安靜下載
     // ==========================================
+    // 網頁載入時把存過的網址填回輸入框
+    const savedGasUrl = localStorage.getItem('gas_url');
+    if (savedGasUrl) {
+        document.getElementById('gas-url').value = savedGasUrl;
+    }
+
     document.addEventListener('DOMContentLoaded', async () => {
-        const gasUrl = document.getElementById('gas-url').value || localStorage.getItem('gas_url') || "您的預設GAS網址填這裡";
+        const gasUrl = document.getElementById('gas-url').value || localStorage.getItem('gas_url') || "https://script.google.com/macros/s/AKfycbx9jJYdlQ9v6kJlHTURZViX5AQ_7KmOEGLyfffVfUgCQVDDBvk4jApv2mLl-knyvFFt/exec";
         if (gasUrl) {
             try {
                 console.log("📥 網頁載入，自動檢查雲端最新資料...");
                 const response = await fetch(gasUrl, {
                     method: "POST",
-                    body: JSON.stringify({ action: "get_all" })
+                    headers: {
+                        "Content-Type": "text/plain;charset=utf-8",
+                    },
+                    body: JSON.stringify({ action: "get_all" }),
+                    redirect: "follow" 
                 });
+                
                 const data = await response.json();
                 
                 if (data && (data.members || data.engagement || data.purchases)) {
+                    // 修正變數與存檔邏輯 (同上方)
                     state.members = data.members || [];
-                    state.engagement = data.engagement || [];
+                    state.sessions = data.engagement || data.sessions || [];
                     state.purchases = data.purchases || [];
                     
-                    localStorage.setItem('badmin_members', JSON.stringify(members));
-                    localStorage.setItem('badmin_engagement', JSON.stringify(engagement));
-                    localStorage.setItem('badmin_purchases', JSON.stringify(purchases));
+                    saveToStorage();
                     
-                    // 觸發畫面更新
                     if (typeof renderMembers === 'function') renderMembers();
-                    if (typeof renderEngagement === 'function') renderEngagement();
+                    if (typeof renderSessions === 'function') renderSessions();
                     if (typeof renderPurchases === 'function') renderPurchases();
-                    if (typeof updateDashboard === 'function') updateDashboard();
+                    
+                    recalculateClubTotals();
+                    if (!document.getElementById('tab-dashboard').classList.contains('hidden')) {
+                        renderCharts();
+                    }
                     console.log("✅ 開機自動同步完成！");
                 }
             } catch (error) {
